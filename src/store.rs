@@ -4,6 +4,6 @@ use std::future::Future;
 pub trait AuthorRepository: Clone + Send + Sync + 'static {
     fn create_author(
         &self,
-        req: CreateAuthorRequest,
+        req: &CreateAuthorRequest,
     ) -> impl Future<Output = Result<Author, CreateAuthorError>> + Send;
 }

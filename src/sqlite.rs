@@ -1,4 +1,4 @@
-use crate::model::{Author, CreateAuthorError, CreateAuthorRequest};
+use crate::model::{Author, AuthorName, CreateAuthorError, CreateAuthorRequest, EmailAddress};
 use crate::store::AuthorRepository;
 use anyhow::{anyhow, Context};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteRow};
@@ -31,25 +31,29 @@ impl<'r> FromRow<'r, SqliteRow> for Author {
         let id = row.try_get("id")?;
         let name = row.try_get("name")?;
         let email = row.try_get("email")?;
+
+        let name = AuthorName::new_unchecked(name);
+        let email = EmailAddress::new_unchecked(email);
         Ok(Self::new(id, name, email))
     }
 }
 
 impl AuthorRepository for Sqlite {
-    async fn create_author(&self, req: CreateAuthorRequest) -> Result<Author, CreateAuthorError> {
+    async fn create_author(&self, req: &CreateAuthorRequest) -> Result<Author, CreateAuthorError> {
         let author = sqlx::query_as("INSERT INTO author (name, email) VALUES (?, ?) RETURNING *")
-            .bind(req.name())
-            .bind(req.email())
+            .bind(req.name().to_string())
+            .bind(req.email().to_string())
             .fetch_one(&self.pool)
             .await
             .map_err(|err| {
                 if is_unique_constraint_violation(&err) {
                     CreateAuthorError::Duplicate {
-                        name: req.name().into(),
+                        name: req.name().to_string(),
                     }
                 } else {
+                    eprintln!("{err}");
                     let err = anyhow!(err)
-                        .context(format!("Failed to create author with name {}", req.name()));
+                        .context(format!("Failed to create author with name \"{}\"", req.name()));
                     CreateAuthorError::Unknown(err)
                 }
             })?;
