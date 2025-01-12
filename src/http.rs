@@ -1,13 +1,17 @@
+use crate::store::AuthorRepository;
 use anyhow::Context;
 use axum::Router;
+use std::sync::Arc;
 use tokio::net::TcpListener;
 
 #[derive(Debug, Clone)]
-pub struct AppState {}
+pub struct AppState<AR: AuthorRepository> {
+    author_repo: Arc<AR>,
+}
 
-impl AppState {
-    pub fn new() -> Self {
-        Self {}
+impl<AR: AuthorRepository> AppState<AR> {
+    pub fn new(author_repo: AR) -> Self {
+        Self { author_repo: Arc::new(author_repo) }
     }
 }
 
@@ -28,7 +32,10 @@ pub struct HttpServer {
 }
 
 impl HttpServer {
-    pub async fn new(state: AppState, config: HttpServerConfig) -> anyhow::Result<Self> {
+    pub async fn new<AR: AuthorRepository>(
+        state: AppState<AR>,
+        config: HttpServerConfig,
+    ) -> anyhow::Result<Self> {
         let router = Router::new()
             .nest("/api/v1", api_routes())
             .with_state(state);
@@ -48,7 +55,6 @@ impl HttpServer {
     }
 }
 
-fn api_routes() -> Router<AppState> {
+fn api_routes<AR: AuthorRepository>() -> Router<AppState<AR>> {
     Router::new()
 }
-
