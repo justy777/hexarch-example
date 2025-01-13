@@ -79,8 +79,7 @@ impl From<CreateAuthorError> for ApiError {
                 Self::Conflict(format!("author with name \"{name}\" already exists"))
             }
             CreateAuthorError::Unknown(cause) => {
-                eprintln!("{cause}");
-                eprintln!("{}", cause.backtrace());
+                tracing::error!("{cause:?}\n{}", cause.backtrace());
                 Self::InternalServerError("Internal server error".to_string())
             }
         }

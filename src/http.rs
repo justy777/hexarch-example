@@ -7,6 +7,7 @@ use axum::routing::post;
 use axum::Router;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tower_http::trace::TraceLayer;
 
 #[derive(Debug, Clone)]
 pub struct AppState<AR: AuthorRepository> {
@@ -42,8 +43,15 @@ impl HttpServer {
         state: AppState<AR>,
         config: HttpServerConfig,
     ) -> anyhow::Result<Self> {
+        let trace_layer =
+            TraceLayer::new_for_http().make_span_with(|request: &axum::extract::Request<_>| {
+                let uri = request.uri().to_string();
+                tracing::info_span!("http_request", method = ?request.method(), uri)
+            });
+
         let router = Router::new()
             .nest("/api/v1", api_routes())
+            .layer(trace_layer)
             .with_state(state);
 
         let listener = TcpListener::bind(format!("0.0.0.0:{}", config.port))
@@ -54,6 +62,7 @@ impl HttpServer {
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
+        tracing::info!("Listening on {}", self.listener.local_addr()?);
         axum::serve(self.listener, self.router)
             .await
             .context("Received error from running server")?;

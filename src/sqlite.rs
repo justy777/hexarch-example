@@ -51,9 +51,10 @@ impl AuthorRepository for Sqlite {
                         name: req.name().to_string(),
                     }
                 } else {
-                    eprintln!("{err}");
-                    let err = anyhow!(err)
-                        .context(format!("Failed to create author with name \"{}\"", req.name()));
+                    let err = anyhow!(err).context(format!(
+                        "Failed to create author with name \"{}\"",
+                        req.name()
+                    ));
                     CreateAuthorError::Unknown(err)
                 }
             })?;
