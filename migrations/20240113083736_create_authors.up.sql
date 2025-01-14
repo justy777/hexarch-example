@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS author (
+    id INTEGER PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    email TEXT NOT NULL
+);

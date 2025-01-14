@@ -1,11 +1,14 @@
 use crate::model::{Author, AuthorName, CreateAuthorError, CreateAuthorRequest, EmailAddress};
 use crate::store::AuthorRepository;
 use anyhow::{anyhow, Context};
+use sqlx::migrate::Migrator;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteRow};
 use sqlx::{FromRow, Row, SqlitePool};
 use std::str::FromStr;
 
 const UNIQUE_CONSTRAINT_VIOLATION_CODE: &str = "2067";
+
+static MIGRATOR: Migrator = sqlx::migrate!();
 
 #[derive(Debug, Clone)]
 pub struct Sqlite {
@@ -21,6 +24,8 @@ impl Sqlite {
         let pool = SqlitePool::connect_with(opts)
             .await
             .with_context(|| format!("Failed to open database at {path}"))?;
+
+        MIGRATOR.run(&pool).await?;
 
         Ok(Self { pool })
     }
