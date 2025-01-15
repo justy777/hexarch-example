@@ -146,10 +146,42 @@ pub enum CreateAuthorError {
 impl std::fmt::Display for CreateAuthorError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Duplicate { name } => write!(f, "Author with name \"{name}\" already exists"),
+            Self::Duplicate { name } => write!(f, r#"Author with name "{name}" already exists"#),
             Self::Unknown(err) => write!(f, "{err}"),
         }
     }
 }
 
 impl std::error::Error for CreateAuthorError {}
+
+#[derive(Debug)]
+pub struct GetAuthorRequest {
+    id: u64,
+}
+
+impl GetAuthorRequest {
+    pub const fn new(id: u64) -> Self {
+        Self { id }
+    }
+
+    pub const fn id(&self) -> u64 {
+        self.id
+    }
+}
+
+#[derive(Debug)]
+pub enum GetAuthorError {
+    NotFound { id: u64 },
+    Unknown(anyhow::Error),
+}
+
+impl std::fmt::Display for GetAuthorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotFound { id } => write!(f, r#"Author with id "{id}" does not exist"#),
+            Self::Unknown(err) => write!(f, "{err}"),
+        }
+    }
+}
+
+impl std::error::Error for GetAuthorError {}

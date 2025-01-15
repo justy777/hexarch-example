@@ -1,9 +1,9 @@
 mod handler;
 
-use crate::http::handler::create_author;
+use crate::http::handler::{create_author, get_author};
 use crate::store::AuthorRepository;
 use anyhow::Context;
-use axum::routing::post;
+use axum::routing::{get, post};
 use axum::Router;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -71,5 +71,7 @@ impl HttpServer {
 }
 
 fn api_routes<AR: AuthorRepository>() -> Router<AppState<AR>> {
-    Router::new().route("/author", post(create_author))
+    Router::new()
+        .route("/authors", post(create_author))
+        .route("/authors/{id}", get(get_author))
 }

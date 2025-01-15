@@ -1,4 +1,7 @@
-use crate::model::{Author, AuthorName, CreateAuthorError, CreateAuthorRequest, EmailAddress};
+use crate::model::{
+    Author, AuthorName, CreateAuthorError, CreateAuthorRequest, EmailAddress, GetAuthorError,
+    GetAuthorRequest,
+};
 use crate::store::AuthorRepository;
 use anyhow::{anyhow, Context};
 use sqlx::migrate::Migrator;
@@ -57,10 +60,30 @@ impl AuthorRepository for Sqlite {
                     }
                 } else {
                     let err = anyhow!(err).context(format!(
-                        "Failed to create author with name \"{}\"",
+                        r#"Failed to create author with name "{}""#,
                         req.name()
                     ));
                     CreateAuthorError::Unknown(err)
+                }
+            })?;
+
+        Ok(author)
+    }
+
+    async fn get_author(&self, req: &GetAuthorRequest) -> Result<Author, GetAuthorError> {
+        let author = sqlx::query_as("SELECT id, name, email FROM author WHERE id = ?")
+            .bind(req.id().to_string())
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|err| {
+                if matches!(err, sqlx::Error::RowNotFound) {
+                    GetAuthorError::NotFound { id: req.id() }
+                } else {
+                    let err = anyhow!(err).context(format!(
+                        r#"Failed to retrieve author with id "{}""#,
+                        req.id()
+                    ));
+                    GetAuthorError::Unknown(err)
                 }
             })?;
 
