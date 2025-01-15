@@ -1,6 +1,6 @@
 use crate::model::{
-    Author, AuthorName, CreateAuthorError, CreateAuthorRequest, EmailAddress, FindAllAuthorsError,
-    FindAuthorError, FindAuthorRequest,
+    Author, AuthorName, CreateAuthorError, CreateAuthorRequest, DeleteAuthorError,
+    DeleteAuthorRequest, EmailAddress, FindAllAuthorsError, FindAuthorError, FindAuthorRequest,
 };
 use crate::store::AuthorRepository;
 use anyhow::{anyhow, Context};
@@ -100,6 +100,24 @@ impl AuthorRepository for Sqlite {
             })?;
 
         Ok(authors)
+    }
+
+    async fn delete_author(&self, req: &DeleteAuthorRequest) -> Result<(), DeleteAuthorError> {
+        sqlx::query("DELETE FROM author WHERE id = ?")
+            .bind(req.id().to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(|err| {
+                if matches!(err, sqlx::Error::RowNotFound) {
+                    DeleteAuthorError::NotFound { id: req.id() }
+                } else {
+                    let err = anyhow!(err)
+                        .context(format!(r#"Failed to delete author with id "{}""#, req.id()));
+                    DeleteAuthorError::Unknown(err)
+                }
+            })?;
+
+        Ok(())
     }
 }
 

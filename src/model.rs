@@ -196,3 +196,35 @@ impl std::fmt::Display for FindAllAuthorsError {
 }
 
 impl std::error::Error for FindAllAuthorsError {}
+
+#[derive(Debug)]
+pub struct DeleteAuthorRequest {
+    id: u64,
+}
+
+impl DeleteAuthorRequest {
+    pub const fn new(id: u64) -> Self {
+        Self { id }
+    }
+
+    pub const fn id(&self) -> u64 {
+        self.id
+    }
+}
+
+#[derive(Debug)]
+pub enum DeleteAuthorError {
+    NotFound { id: u64 },
+    Unknown(anyhow::Error),
+}
+
+impl std::fmt::Display for DeleteAuthorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotFound { id } => write!(f, r#"Author with id "{id}" does not exist"#),
+            Self::Unknown(err) => write!(f, "{err}"),
+        }
+    }
+}
+
+impl std::error::Error for DeleteAuthorError {}

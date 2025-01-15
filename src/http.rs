@@ -1,6 +1,6 @@
 mod handler;
 
-use crate::http::handler::{create_author, find_all_authors, find_author};
+use crate::http::handler::{create_author, delete_author, find_all_authors, find_author};
 use crate::store::AuthorRepository;
 use anyhow::Context;
 use axum::routing::get;
@@ -73,5 +73,5 @@ impl HttpServer {
 fn api_routes<AR: AuthorRepository>() -> Router<AppState<AR>> {
     Router::new()
         .route("/authors", get(find_all_authors).post(create_author))
-        .route("/authors/{id}", get(find_author))
+        .route("/authors/{id}", get(find_author).delete(delete_author))
 }

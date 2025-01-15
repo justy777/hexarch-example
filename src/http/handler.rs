@@ -1,7 +1,8 @@
 use crate::http::AppState;
 use crate::model::{
-    Author, AuthorName, AuthorNameError, CreateAuthorError, CreateAuthorRequest, EmailAddress,
-    EmailAddressError, FindAllAuthorsError, FindAuthorError, FindAuthorRequest,
+    Author, AuthorName, AuthorNameError, CreateAuthorError, CreateAuthorRequest, DeleteAuthorError,
+    DeleteAuthorRequest, EmailAddress, EmailAddressError, FindAllAuthorsError, FindAuthorError,
+    FindAuthorRequest,
 };
 use crate::store::AuthorRepository;
 use axum::extract::{Json, Path, State};
@@ -129,6 +130,20 @@ impl From<FindAllAuthorsError> for ApiError {
     }
 }
 
+impl From<DeleteAuthorError> for ApiError {
+    fn from(err: DeleteAuthorError) -> Self {
+        match err {
+            DeleteAuthorError::NotFound { id } => {
+                Self::NotFound(format!(r#"author with id "{id}" does not exist"#))
+            }
+            DeleteAuthorError::Unknown(cause) => {
+                tracing::error!("{cause:?}\n{}", cause.backtrace());
+                Self::InternalServerError("Internal server error".to_string())
+            }
+        }
+    }
+}
+
 impl From<ParseIdError> for ApiError {
     fn from(err: ParseIdError) -> Self {
         Self::BadRequest(format!(r#"Cannot parse id from "{}""#, err.id))
@@ -243,6 +258,17 @@ impl From<Vec<Author>> for FindAllAuthorsHttpResponse {
     }
 }
 
+impl TryFrom<String> for DeleteAuthorRequest {
+    type Error = ParseIdError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let id = value
+            .parse::<u64>()
+            .map_err(|_| ParseIdError { id: value })?;
+        Ok(Self::new(id))
+    }
+}
+
 pub async fn create_author<AR: AuthorRepository>(
     State(state): State<AppState<AR>>,
     Json(body): Json<CreateAuthorHttpRequest>,
@@ -278,4 +304,17 @@ pub async fn find_all_authors<AR: AuthorRepository>(
         .await
         .map_err(ApiError::from)
         .map(|authors| ApiSuccess::new(StatusCode::OK, authors.into()))
+}
+
+pub async fn delete_author<AR: AuthorRepository>(
+    Path(id): Path<String>,
+    State(state): State<AppState<AR>>,
+) -> Result<ApiSuccess<()>, ApiError> {
+    let req = id.try_into()?;
+    state
+        .author_repo
+        .delete_author(&req)
+        .await
+        .map_err(ApiError::from)
+        .map(|()| ApiSuccess::new(StatusCode::NO_CONTENT, ()))
 }
