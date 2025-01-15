@@ -1,6 +1,6 @@
 use crate::model::{
-    Author, AuthorName, CreateAuthorError, CreateAuthorRequest, EmailAddress, GetAuthorError,
-    GetAuthorRequest,
+    Author, AuthorName, CreateAuthorError, CreateAuthorRequest, EmailAddress, FindAllAuthorsError,
+    FindAuthorError, FindAuthorRequest,
 };
 use crate::store::AuthorRepository;
 use anyhow::{anyhow, Context};
@@ -70,24 +70,36 @@ impl AuthorRepository for Sqlite {
         Ok(author)
     }
 
-    async fn get_author(&self, req: &GetAuthorRequest) -> Result<Author, GetAuthorError> {
+    async fn find_author(&self, req: &FindAuthorRequest) -> Result<Author, FindAuthorError> {
         let author = sqlx::query_as("SELECT id, name, email FROM author WHERE id = ?")
             .bind(req.id().to_string())
             .fetch_one(&self.pool)
             .await
             .map_err(|err| {
                 if matches!(err, sqlx::Error::RowNotFound) {
-                    GetAuthorError::NotFound { id: req.id() }
+                    FindAuthorError::NotFound { id: req.id() }
                 } else {
                     let err = anyhow!(err).context(format!(
                         r#"Failed to retrieve author with id "{}""#,
                         req.id()
                     ));
-                    GetAuthorError::Unknown(err)
+                    FindAuthorError::Unknown(err)
                 }
             })?;
 
         Ok(author)
+    }
+
+    async fn find_all_authors(&self) -> Result<Vec<Author>, FindAllAuthorsError> {
+        let authors = sqlx::query_as("SELECT id, name, email FROM author")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|err| {
+                let err = anyhow!(err).context("Failed to retrieve all authors");
+                FindAllAuthorsError(err)
+            })?;
+
+        Ok(authors)
     }
 }
 

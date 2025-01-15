@@ -1,5 +1,6 @@
 use crate::model::{
-    Author, CreateAuthorError, CreateAuthorRequest, GetAuthorError, GetAuthorRequest,
+    Author, CreateAuthorError, CreateAuthorRequest, FindAllAuthorsError, FindAuthorError,
+    FindAuthorRequest,
 };
 use std::future::Future;
 
@@ -9,8 +10,12 @@ pub trait AuthorRepository: Clone + Send + Sync + 'static {
         req: &CreateAuthorRequest,
     ) -> impl Future<Output = Result<Author, CreateAuthorError>> + Send;
 
-    fn get_author(
+    fn find_author(
         &self,
-        req: &GetAuthorRequest,
-    ) -> impl Future<Output = Result<Author, GetAuthorError>> + Send;
+        req: &FindAuthorRequest,
+    ) -> impl Future<Output = Result<Author, FindAuthorError>> + Send;
+
+    fn find_all_authors(
+        &self,
+    ) -> impl Future<Output = Result<Vec<Author>, FindAllAuthorsError>> + Send;
 }

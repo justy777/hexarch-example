@@ -155,11 +155,11 @@ impl std::fmt::Display for CreateAuthorError {
 impl std::error::Error for CreateAuthorError {}
 
 #[derive(Debug)]
-pub struct GetAuthorRequest {
+pub struct FindAuthorRequest {
     id: u64,
 }
 
-impl GetAuthorRequest {
+impl FindAuthorRequest {
     pub const fn new(id: u64) -> Self {
         Self { id }
     }
@@ -170,12 +170,12 @@ impl GetAuthorRequest {
 }
 
 #[derive(Debug)]
-pub enum GetAuthorError {
+pub enum FindAuthorError {
     NotFound { id: u64 },
     Unknown(anyhow::Error),
 }
 
-impl std::fmt::Display for GetAuthorError {
+impl std::fmt::Display for FindAuthorError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotFound { id } => write!(f, r#"Author with id "{id}" does not exist"#),
@@ -184,4 +184,15 @@ impl std::fmt::Display for GetAuthorError {
     }
 }
 
-impl std::error::Error for GetAuthorError {}
+impl std::error::Error for FindAuthorError {}
+
+#[derive(Debug)]
+pub struct FindAllAuthorsError(pub anyhow::Error);
+
+impl std::fmt::Display for FindAllAuthorsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for FindAllAuthorsError {}

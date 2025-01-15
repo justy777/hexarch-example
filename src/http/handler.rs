@@ -1,7 +1,7 @@
 use crate::http::AppState;
 use crate::model::{
     Author, AuthorName, AuthorNameError, CreateAuthorError, CreateAuthorRequest, EmailAddress,
-    EmailAddressError, GetAuthorError, GetAuthorRequest,
+    EmailAddressError, FindAllAuthorsError, FindAuthorError, FindAuthorRequest,
 };
 use crate::store::AuthorRepository;
 use axum::extract::{Json, Path, State};
@@ -104,13 +104,24 @@ impl From<CreateAuthorError> for ApiError {
     }
 }
 
-impl From<GetAuthorError> for ApiError {
-    fn from(err: GetAuthorError) -> Self {
+impl From<FindAuthorError> for ApiError {
+    fn from(err: FindAuthorError) -> Self {
         match err {
-            GetAuthorError::NotFound { id } => {
+            FindAuthorError::NotFound { id } => {
                 Self::NotFound(format!(r#"author with id "{id}" does not exist"#))
             }
-            GetAuthorError::Unknown(cause) => {
+            FindAuthorError::Unknown(cause) => {
+                tracing::error!("{cause:?}\n{}", cause.backtrace());
+                Self::InternalServerError("Internal server error".to_string())
+            }
+        }
+    }
+}
+
+impl From<FindAllAuthorsError> for ApiError {
+    fn from(err: FindAllAuthorsError) -> Self {
+        match err {
+            FindAllAuthorsError(cause) => {
                 tracing::error!("{cause:?}\n{}", cause.backtrace());
                 Self::InternalServerError("Internal server error".to_string())
             }
@@ -191,7 +202,7 @@ impl From<Author> for CreateAuthorHttpResponse {
     }
 }
 
-impl TryFrom<String> for GetAuthorRequest {
+impl TryFrom<String> for FindAuthorRequest {
     type Error = ParseIdError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
@@ -203,19 +214,32 @@ impl TryFrom<String> for GetAuthorRequest {
 }
 
 #[derive(Debug, Serialize)]
-pub struct GetAuthorHttpResponse {
+pub struct FindAuthorHttpResponse {
     id: u64,
     name: String,
     email: String,
 }
 
-impl From<Author> for GetAuthorHttpResponse {
+impl From<Author> for FindAuthorHttpResponse {
     fn from(value: Author) -> Self {
         Self {
             id: value.id(),
             name: value.name().to_string(),
             email: value.email().to_string(),
         }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct FindAllAuthorsHttpResponse(Vec<FindAuthorHttpResponse>);
+
+impl From<Vec<Author>> for FindAllAuthorsHttpResponse {
+    fn from(values: Vec<Author>) -> Self {
+        let vec = values
+            .into_iter()
+            .map(FindAuthorHttpResponse::from)
+            .collect();
+        Self(vec)
     }
 }
 
@@ -232,15 +256,26 @@ pub async fn create_author<AR: AuthorRepository>(
         .map(|author| ApiSuccess::new(StatusCode::CREATED, author.into()))
 }
 
-pub async fn get_author<AR: AuthorRepository>(
+pub async fn find_author<AR: AuthorRepository>(
     Path(id): Path<String>,
     State(state): State<AppState<AR>>,
-) -> Result<ApiSuccess<GetAuthorHttpResponse>, ApiError> {
+) -> Result<ApiSuccess<FindAuthorHttpResponse>, ApiError> {
     let req = id.try_into()?;
     state
         .author_repo
-        .get_author(&req)
+        .find_author(&req)
         .await
         .map_err(ApiError::from)
         .map(|author| ApiSuccess::new(StatusCode::OK, author.into()))
+}
+
+pub async fn find_all_authors<AR: AuthorRepository>(
+    State(state): State<AppState<AR>>,
+) -> Result<ApiSuccess<FindAllAuthorsHttpResponse>, ApiError> {
+    state
+        .author_repo
+        .find_all_authors()
+        .await
+        .map_err(ApiError::from)
+        .map(|authors| ApiSuccess::new(StatusCode::OK, authors.into()))
 }
