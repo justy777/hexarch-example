@@ -11,27 +11,36 @@ use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
-pub struct ApiSuccess<T: Serialize>(StatusCode, Json<ApiResponse<T>>);
+pub struct ApiSuccess<T: Serialize + PartialEq>(StatusCode, Json<ApiResponse<T>>);
 
-impl<T: Serialize> ApiSuccess<T> {
+impl<T: Serialize + PartialEq> ApiSuccess<T> {
     pub const fn new(status: StatusCode, data: T) -> Self {
         Self(status, Json(ApiResponse::new(status, data)))
     }
 }
 
-impl<T: Serialize> IntoResponse for ApiSuccess<T> {
+impl<T> PartialEq for ApiSuccess<T>
+where
+    T: Serialize + PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0 && self.1 .0 == other.1 .0
+    }
+}
+
+impl<T: Serialize + PartialEq> IntoResponse for ApiSuccess<T> {
     fn into_response(self) -> axum::response::Response {
         (self.0, self.1).into_response()
     }
 }
 
-#[derive(Debug, Serialize)]
-pub struct ApiResponse<T: Serialize> {
+#[derive(Debug, PartialEq, Eq, Serialize)]
+pub struct ApiResponse<T: Serialize + PartialEq> {
     status_code: u16,
     data: T,
 }
 
-impl<T: Serialize> ApiResponse<T> {
+impl<T: Serialize + PartialEq> ApiResponse<T> {
     const fn new(status: StatusCode, data: T) -> Self {
         Self {
             status_code: status.as_u16(),
@@ -195,7 +204,7 @@ impl TryFrom<CreateAuthorHttpRequest> for CreateAuthorRequest {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct CreateAuthorHttpResponse {
     id: u64,
 }
@@ -228,7 +237,7 @@ impl TryFrom<String> for FindAuthorRequest {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct FindAuthorHttpResponse {
     id: u64,
     name: String,
@@ -245,7 +254,7 @@ impl From<Author> for FindAuthorHttpResponse {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct FindAllAuthorsHttpResponse(Vec<FindAuthorHttpResponse>);
 
 impl From<Vec<Author>> for FindAllAuthorsHttpResponse {
@@ -317,4 +326,210 @@ pub async fn delete_author<AR: AuthorRepository>(
         .await
         .map_err(ApiError::from)
         .map(|()| ApiSuccess::new(StatusCode::NO_CONTENT, ()))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::http::handler::{
+        create_author, delete_author, find_all_authors, find_author, ApiSuccess,
+        CreateAuthorHttpRequest, CreateAuthorHttpResponse, FindAllAuthorsHttpResponse,
+        FindAuthorHttpResponse,
+    };
+    use crate::http::AppState;
+    use crate::model::{
+        Author, AuthorName, CreateAuthorError, CreateAuthorRequest, DeleteAuthorError,
+        DeleteAuthorRequest, EmailAddress, FindAllAuthorsError, FindAuthorError, FindAuthorRequest,
+    };
+    use crate::store::AuthorRepository;
+    use anyhow::anyhow;
+    use axum::extract::{Path, State};
+    use axum::http::StatusCode;
+    use axum::Json;
+    use std::mem;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone)]
+    struct MockAuthorRepository {
+        create: Arc<Mutex<Result<Author, CreateAuthorError>>>,
+        find: Arc<Mutex<Result<Author, FindAuthorError>>>,
+        find_all: Arc<Mutex<Result<Vec<Author>, FindAllAuthorsError>>>,
+        delete: Arc<Mutex<Result<(), DeleteAuthorError>>>,
+    }
+
+    impl MockAuthorRepository {
+        pub fn new() -> Self {
+            Self {
+                create: Arc::new(Mutex::new(Err(CreateAuthorError::Unknown(anyhow!(
+                    "substitute error"
+                ))))),
+                find: Arc::new(Mutex::new(Err(FindAuthorError::Unknown(anyhow!(
+                    "substitute error"
+                ))))),
+                find_all: Arc::new(Mutex::new(Err(FindAllAuthorsError(anyhow!(
+                    "substitute error"
+                ))))),
+                delete: Arc::new(Mutex::new(Err(DeleteAuthorError::Unknown(anyhow!(
+                    "substitute error"
+                ))))),
+            }
+        }
+    }
+
+    impl AuthorRepository for MockAuthorRepository {
+        async fn create_author(
+            &self,
+            _: &CreateAuthorRequest,
+        ) -> Result<Author, CreateAuthorError> {
+            let mut guard = self.create.lock();
+            let mut result = Err(CreateAuthorError::Unknown(anyhow!("substitute error")));
+            mem::swap(guard.as_deref_mut().unwrap(), &mut result);
+            result
+        }
+
+        async fn find_author(&self, _: &FindAuthorRequest) -> Result<Author, FindAuthorError> {
+            let mut guard = self.find.lock();
+            let mut result = Err(FindAuthorError::Unknown(anyhow!("substitute error")));
+            mem::swap(guard.as_deref_mut().unwrap(), &mut result);
+            result
+        }
+
+        async fn find_all_authors(&self) -> Result<Vec<Author>, FindAllAuthorsError> {
+            let mut guard = self.find_all.lock();
+            let mut result = Err(FindAllAuthorsError(anyhow!("substitute error")));
+            mem::swap(guard.as_deref_mut().unwrap(), &mut result);
+            result
+        }
+
+        async fn delete_author(&self, _: &DeleteAuthorRequest) -> Result<(), DeleteAuthorError> {
+            let mut guard = self.delete.lock();
+            let mut result = Err(DeleteAuthorError::Unknown(anyhow!("substitute error")));
+            mem::swap(guard.as_deref_mut().unwrap(), &mut result);
+            result
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn create_author_handler_success() {
+        let author_id = 1;
+        let author_name = AuthorName::new("JRR Tolkien").unwrap();
+        let author_email = EmailAddress::new("jrr.tolkien@example.com").unwrap();
+        let repo = MockAuthorRepository {
+            create: Arc::new(Mutex::new(Ok(Author::new(
+                author_id,
+                author_name.clone(),
+                author_email.clone(),
+            )))),
+            ..MockAuthorRepository::new()
+        };
+        let state = State(AppState::new(repo));
+        let body = Json(CreateAuthorHttpRequest {
+            name: author_name.to_string(),
+            email: author_email.to_string(),
+        });
+        let expected = ApiSuccess::new(
+            StatusCode::CREATED,
+            CreateAuthorHttpResponse { id: author_id },
+        );
+        let actual = create_author(state, body).await;
+        assert!(
+            actual.is_ok(),
+            "expected create author to succeed, but got {actual:?}",
+        );
+        let actual = actual.unwrap();
+        assert_eq!(
+            expected, actual,
+            "expected ApiSuccess {expected:?}, but got {actual:?}",
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn find_author_handler_success() {
+        let author_id = 1;
+        let author_name = AuthorName::new("JRR Tolkien").unwrap();
+        let author_email = EmailAddress::new("jrr.tolkien@example.com").unwrap();
+        let repo = MockAuthorRepository {
+            find: Arc::new(Mutex::new(Ok(Author::new(
+                author_id,
+                author_name.clone(),
+                author_email.clone(),
+            )))),
+            ..MockAuthorRepository::new()
+        };
+        let path = Path(author_id.to_string());
+        let state = State(AppState::new(repo));
+        let expected = ApiSuccess::new(
+            StatusCode::OK,
+            FindAuthorHttpResponse {
+                id: author_id,
+                name: author_name.to_string(),
+                email: author_email.to_string(),
+            },
+        );
+        let actual = find_author(path, state).await;
+        assert!(
+            actual.is_ok(),
+            "expected find author to succeed, but got {actual:?}",
+        );
+        let actual = actual.unwrap();
+        assert_eq!(
+            expected, actual,
+            "expected ApiSuccess {expected:?}, but got {actual:?}",
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn find_all_authors_handler_success() {
+        let author_id = 1;
+        let author_name = AuthorName::new("JRR Tolkien").unwrap();
+        let author_email = EmailAddress::new("jrr.tolkien@example.com").unwrap();
+        let repo = MockAuthorRepository {
+            find_all: Arc::new(Mutex::new(Ok(vec![Author::new(
+                author_id,
+                author_name.clone(),
+                author_email.clone(),
+            )]))),
+            ..MockAuthorRepository::new()
+        };
+        let state = State(AppState::new(repo));
+        let expected = ApiSuccess::new(
+            StatusCode::OK,
+            FindAllAuthorsHttpResponse(vec![FindAuthorHttpResponse {
+                id: author_id,
+                name: author_name.to_string(),
+                email: author_email.to_string(),
+            }]),
+        );
+        let actual = find_all_authors(state).await;
+        assert!(
+            actual.is_ok(),
+            "expected find author to succeed, but got {actual:?}",
+        );
+        let actual = actual.unwrap();
+        assert_eq!(
+            expected, actual,
+            "expected ApiSuccess {expected:?}, but got {actual:?}",
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn delete_author_handler_success() {
+        let author_id = 1;
+        let repo = MockAuthorRepository {
+            delete: Arc::new(Mutex::new(Ok(()))),
+            ..MockAuthorRepository::new()
+        };
+        let path = Path(author_id.to_string());
+        let state = State(AppState::new(repo));
+        let expected = ApiSuccess::new(StatusCode::NO_CONTENT, ());
+        let actual = delete_author(path, state).await;
+        assert!(
+            actual.is_ok(),
+            "expected delete author to succeed, but got {actual:?}",
+        );
+        let actual = actual.unwrap();
+        assert_eq!(
+            expected, actual,
+            "expected ApiSuccess {expected:?}, but got {actual:?}",
+        );
+    }
 }

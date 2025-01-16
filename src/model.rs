@@ -1,7 +1,7 @@
 use regex::Regex;
 use std::sync::LazyLock;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AuthorName(String);
 
 impl AuthorName {
@@ -42,7 +42,7 @@ impl std::fmt::Display for AuthorNameError {
 
 impl std::error::Error for AuthorNameError {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EmailAddress(String);
 
 impl EmailAddress {
