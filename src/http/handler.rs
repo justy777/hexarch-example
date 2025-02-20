@@ -24,7 +24,7 @@ where
     T: Serialize + PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0 && self.1 .0 == other.1 .0
+        self.0 == other.0 && self.1.0 == other.1.0
     }
 }
 
@@ -330,21 +330,20 @@ pub async fn delete_author<AR: AuthorRepository>(
 
 #[cfg(test)]
 mod tests {
-    use crate::http::handler::{
-        create_author, delete_author, find_all_authors, find_author, ApiSuccess,
-        CreateAuthorHttpRequest, CreateAuthorHttpResponse, FindAllAuthorsHttpResponse,
-        FindAuthorHttpResponse,
-    };
     use crate::http::AppState;
+    use crate::http::handler::{
+        ApiSuccess, CreateAuthorHttpRequest, CreateAuthorHttpResponse, FindAllAuthorsHttpResponse,
+        FindAuthorHttpResponse, create_author, delete_author, find_all_authors, find_author,
+    };
     use crate::model::{
         Author, AuthorName, CreateAuthorError, CreateAuthorRequest, DeleteAuthorError,
         DeleteAuthorRequest, EmailAddress, FindAllAuthorsError, FindAuthorError, FindAuthorRequest,
     };
     use crate::store::AuthorRepository;
     use anyhow::anyhow;
+    use axum::Json;
     use axum::extract::{Path, State};
     use axum::http::StatusCode;
-    use axum::Json;
     use std::mem;
     use std::sync::{Arc, Mutex};
 

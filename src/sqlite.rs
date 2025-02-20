@@ -3,7 +3,7 @@ use crate::model::{
     DeleteAuthorRequest, EmailAddress, FindAllAuthorsError, FindAuthorError, FindAuthorRequest,
 };
 use crate::store::AuthorRepository;
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use sqlx::migrate::Migrator;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteRow};
 use sqlx::{FromRow, Row, SqlitePool};
@@ -122,7 +122,7 @@ impl AuthorRepository for Sqlite {
 }
 
 fn is_unique_constraint_violation(err: &sqlx::Error) -> bool {
-    if let sqlx::Error::Database(ref db_err) = err {
+    if let sqlx::Error::Database(db_err) = err {
         if let Some(code) = db_err.code() {
             return UNIQUE_CONSTRAINT_VIOLATION_CODE == code;
         }
