@@ -16,10 +16,12 @@ impl Config {
         })
     }
 
+    #[must_use]
     pub fn database_url(&self) -> &str {
         &self.database_url
     }
 
+    #[must_use]
     pub fn server_port(&self) -> &str {
         &self.server_port
     }

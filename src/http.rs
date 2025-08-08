@@ -28,6 +28,7 @@ pub struct HttpServerConfig {
 }
 
 impl HttpServerConfig {
+    #[must_use]
     pub fn new(port: &str) -> Self {
         Self { port: port.into() }
     }

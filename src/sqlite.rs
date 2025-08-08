@@ -122,10 +122,10 @@ impl AuthorRepository for Sqlite {
 }
 
 fn is_unique_constraint_violation(err: &sqlx::Error) -> bool {
-    if let sqlx::Error::Database(db_err) = err {
-        if let Some(code) = db_err.code() {
-            return UNIQUE_CONSTRAINT_VIOLATION_CODE == code;
-        }
+    if let sqlx::Error::Database(db_err) = err
+        && let Some(code) = db_err.code()
+    {
+        return UNIQUE_CONSTRAINT_VIOLATION_CODE == code;
     }
 
     false

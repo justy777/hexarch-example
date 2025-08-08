@@ -35,7 +35,7 @@ impl<T: Serialize + PartialEq> IntoResponse for ApiSuccess<T> {
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
-pub struct ApiResponse<T: Serialize + PartialEq> {
+pub struct ApiResponse<T> {
     status_code: u16,
     data: T,
 }
