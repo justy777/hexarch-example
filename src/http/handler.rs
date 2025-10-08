@@ -4,7 +4,6 @@ use crate::model::{
     DeleteAuthorError, DeleteAuthorRequest, EmailAddress, EmailAddressError, FindAllAuthorsError,
     FindAuthorError, FindAuthorRequest,
 };
-use crate::store::AuthorRepository;
 use axum::extract::{Json, Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -243,8 +242,8 @@ impl TryFrom<String> for DeleteAuthorRequest {
     }
 }
 
-pub async fn create_author<AR: AuthorRepository>(
-    State(state): State<AppState<AR>>,
+pub async fn create_author(
+    State(state): State<AppState>,
     Json(body): Json<CreateAuthorHttpRequest>,
 ) -> Result<ApiSuccess<CreateAuthorHttpResponse>, ApiError> {
     let req = body.try_into()?;
@@ -256,9 +255,9 @@ pub async fn create_author<AR: AuthorRepository>(
         .map(|author| ApiSuccess::new(StatusCode::CREATED, author.into()))
 }
 
-pub async fn find_author<AR: AuthorRepository>(
+pub async fn find_author(
     Path(id): Path<String>,
-    State(state): State<AppState<AR>>,
+    State(state): State<AppState>,
 ) -> Result<ApiSuccess<FindAuthorHttpResponse>, ApiError> {
     let req = id.try_into()?;
     state
@@ -269,8 +268,8 @@ pub async fn find_author<AR: AuthorRepository>(
         .map(|author| ApiSuccess::new(StatusCode::OK, author.into()))
 }
 
-pub async fn find_all_authors<AR: AuthorRepository>(
-    State(state): State<AppState<AR>>,
+pub async fn find_all_authors(
+    State(state): State<AppState>,
 ) -> Result<ApiSuccess<FindAllAuthorsHttpResponse>, ApiError> {
     state
         .author_repo
@@ -280,9 +279,9 @@ pub async fn find_all_authors<AR: AuthorRepository>(
         .map(|authors| ApiSuccess::new(StatusCode::OK, authors.into()))
 }
 
-pub async fn delete_author<AR: AuthorRepository>(
+pub async fn delete_author(
     Path(id): Path<String>,
-    State(state): State<AppState<AR>>,
+    State(state): State<AppState>,
 ) -> Result<ApiSuccess<()>, ApiError> {
     let req = id.try_into()?;
     state
@@ -306,6 +305,7 @@ mod tests {
     };
     use crate::store::AuthorRepository;
     use anyhow::anyhow;
+    use async_trait::async_trait;
     use axum::Json;
     use axum::extract::{Path, State};
     use axum::http::StatusCode;
@@ -339,6 +339,7 @@ mod tests {
         }
     }
 
+    #[async_trait]
     impl AuthorRepository for MockAuthorRepository {
         async fn create_author(
             &self,

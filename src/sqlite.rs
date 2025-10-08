@@ -4,6 +4,7 @@ use crate::model::{
 };
 use crate::store::AuthorRepository;
 use anyhow::{Context, anyhow};
+use async_trait::async_trait;
 use sqlx::migrate::Migrator;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteRow};
 use sqlx::{FromRow, Row, SqlitePool};
@@ -13,7 +14,7 @@ const UNIQUE_CONSTRAINT_VIOLATION_CODE: &str = "2067";
 
 static MIGRATOR: Migrator = sqlx::migrate!();
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Sqlite {
     pool: SqlitePool,
 }
@@ -46,6 +47,7 @@ impl<'r> FromRow<'r, SqliteRow> for Author {
     }
 }
 
+#[async_trait]
 impl AuthorRepository for Sqlite {
     async fn create_author(&self, req: &CreateAuthorRequest) -> Result<Author, CreateAuthorError> {
         let author = sqlx::query_as("INSERT INTO author (name, email) VALUES (?, ?) RETURNING *")

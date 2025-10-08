@@ -1,6 +1,7 @@
 mod handler;
 
 use crate::http::handler::{create_author, delete_author, find_all_authors, find_author};
+
 use crate::store::AuthorRepository;
 use anyhow::Context;
 use axum::Router;
@@ -9,13 +10,13 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 
-#[derive(Debug, Clone)]
-pub struct AppState<AR: AuthorRepository> {
-    author_repo: Arc<AR>,
+#[derive(Clone)]
+pub struct AppState {
+    author_repo: Arc<dyn AuthorRepository>,
 }
 
-impl<AR: AuthorRepository> AppState<AR> {
-    pub fn new(author_repo: AR) -> Self {
+impl AppState {
+    pub fn new(author_repo: impl AuthorRepository) -> Self {
         Self {
             author_repo: Arc::new(author_repo),
         }
@@ -40,10 +41,7 @@ pub struct HttpServer {
 }
 
 impl HttpServer {
-    pub async fn new<AR: AuthorRepository>(
-        state: AppState<AR>,
-        config: HttpServerConfig,
-    ) -> anyhow::Result<Self> {
+    pub async fn new(state: AppState, config: HttpServerConfig) -> anyhow::Result<Self> {
         let trace_layer =
             TraceLayer::new_for_http().make_span_with(|request: &axum::extract::Request<_>| {
                 let uri = request.uri().to_string();
@@ -71,7 +69,7 @@ impl HttpServer {
     }
 }
 
-fn api_routes<AR: AuthorRepository>() -> Router<AppState<AR>> {
+fn api_routes() -> Router<AppState> {
     Router::new()
         .route("/authors", get(find_all_authors).post(create_author))
         .route("/authors/{id}", get(find_author).delete(delete_author))

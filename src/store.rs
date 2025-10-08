@@ -2,25 +2,15 @@ use crate::model::{
     Author, CreateAuthorError, CreateAuthorRequest, DeleteAuthorError, DeleteAuthorRequest,
     FindAllAuthorsError, FindAuthorError, FindAuthorRequest,
 };
-use std::future::Future;
+use async_trait::async_trait;
 
-pub trait AuthorRepository: Clone + Send + Sync + 'static {
-    fn create_author(
-        &self,
-        req: &CreateAuthorRequest,
-    ) -> impl Future<Output = Result<Author, CreateAuthorError>> + Send;
+#[async_trait]
+pub trait AuthorRepository: Send + Sync + 'static {
+    async fn create_author(&self, req: &CreateAuthorRequest) -> Result<Author, CreateAuthorError>;
 
-    fn find_author(
-        &self,
-        req: &FindAuthorRequest,
-    ) -> impl Future<Output = Result<Author, FindAuthorError>> + Send;
+    async fn find_author(&self, req: &FindAuthorRequest) -> Result<Author, FindAuthorError>;
 
-    fn find_all_authors(
-        &self,
-    ) -> impl Future<Output = Result<Vec<Author>, FindAllAuthorsError>> + Send;
+    async fn find_all_authors(&self) -> Result<Vec<Author>, FindAllAuthorsError>;
 
-    fn delete_author(
-        &self,
-        req: &DeleteAuthorRequest,
-    ) -> impl Future<Output = Result<(), DeleteAuthorError>> + Send;
+    async fn delete_author(&self, req: &DeleteAuthorRequest) -> Result<(), DeleteAuthorError>;
 }
