@@ -49,7 +49,7 @@ impl HttpServer {
             });
 
         let router = Router::new()
-            .nest("/api/v1", api_routes())
+            .nest("/api/v1", routes())
             .layer(trace_layer)
             .with_state(state);
 
@@ -69,7 +69,7 @@ impl HttpServer {
     }
 }
 
-fn api_routes() -> Router<AppState> {
+fn routes() -> Router<AppState> {
     Router::new()
         .route("/authors", get(find_all_authors).post(create_author))
         .route("/authors/{id}", get(find_author).delete(delete_author))

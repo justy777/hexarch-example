@@ -10,138 +10,112 @@ use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Debug)]
-pub struct ApiSuccess<T>(StatusCode, Json<ApiResponse<T>>);
+#[derive(Debug, PartialEq, Eq)]
+pub struct HttpSuccess<T>(StatusCode, T);
 
-impl<T: Serialize + PartialEq> ApiSuccess<T> {
+impl<T: Serialize> HttpSuccess<T> {
     pub const fn new(status: StatusCode, data: T) -> Self {
-        Self(status, Json(ApiResponse::new(status, data)))
+        Self(status, data)
     }
 }
 
-impl<T> PartialEq for ApiSuccess<T>
-where
-    T: Serialize + PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0 && self.1.0 == other.1.0
-    }
-}
-
-impl<T: Serialize + PartialEq> IntoResponse for ApiSuccess<T> {
+impl<T: Serialize> IntoResponse for HttpSuccess<T> {
     fn into_response(self) -> axum::response::Response {
-        (self.0, self.1).into_response()
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Serialize)]
-pub struct ApiResponse<T> {
-    status_code: u16,
-    data: T,
-}
-
-impl<T: Serialize + PartialEq> ApiResponse<T> {
-    const fn new(status: StatusCode, data: T) -> Self {
-        Self {
-            status_code: status.as_u16(),
-            data,
-        }
+        (self.0, Json(self.1)).into_response()
     }
 }
 
 #[derive(Error, Debug)]
-#[error("{0}")]
-pub enum ApiError {
-    InternalServerError(String),
-    BadRequest(String),
-    NotFound(String),
-    Conflict(String),
-    UnprocessableEntity(String),
-}
+#[error("{1}")]
+pub struct HttpError(StatusCode, String);
 
-impl ApiError {
-    const fn status(&self) -> StatusCode {
-        match self {
-            Self::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::BadRequest(_) => StatusCode::BAD_REQUEST,
-            Self::NotFound(_) => StatusCode::NOT_FOUND,
-            Self::Conflict(_) => StatusCode::CONFLICT,
-            Self::UnprocessableEntity(_) => StatusCode::UNPROCESSABLE_ENTITY,
-        }
-    }
-}
-
-impl IntoResponse for ApiError {
+impl IntoResponse for HttpError {
     fn into_response(self) -> axum::response::Response {
-        let status = self.status();
-        let msg = format!("{self}");
-        (status, Json(ApiResponse::new(status, msg))).into_response()
+        (self.0, Json(self.1)).into_response()
     }
 }
 
-impl From<ParseCreateAuthorHttpRequestError> for ApiError {
+impl From<ParseCreateAuthorHttpRequestError> for HttpError {
     fn from(err: ParseCreateAuthorHttpRequestError) -> Self {
-        let message = err.to_string();
-        Self::UnprocessableEntity(message)
+        let msg = err.to_string();
+        Self(StatusCode::UNPROCESSABLE_ENTITY, msg)
     }
 }
 
-impl From<CreateAuthorError> for ApiError {
+impl From<CreateAuthorError> for HttpError {
     fn from(err: CreateAuthorError) -> Self {
         match err {
-            CreateAuthorError::Duplicate { name } => {
-                Self::Conflict(format!(r#"author with name "{name}" already exists"#))
-            }
+            CreateAuthorError::Duplicate { name } => Self(
+                StatusCode::CONFLICT,
+                format!(r#"author with name "{name}" already exists"#),
+            ),
             CreateAuthorError::Other(cause) => {
                 tracing::error!("{cause:?}\n{}", cause.backtrace());
-                Self::InternalServerError("Internal server error".to_string())
+                Self(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
             }
         }
     }
 }
 
-impl From<FindAuthorError> for ApiError {
+impl From<FindAuthorError> for HttpError {
     fn from(err: FindAuthorError) -> Self {
         match err {
-            FindAuthorError::NotFound { id } => {
-                Self::NotFound(format!(r#"author with id "{id}" does not exist"#))
-            }
+            FindAuthorError::NotFound { id } => Self(
+                StatusCode::NOT_FOUND,
+                format!(r#"author with id "{id}" does not exist"#),
+            ),
             FindAuthorError::Other(cause) => {
                 tracing::error!("{cause:?}\n{}", cause.backtrace());
-                Self::InternalServerError("Internal server error".to_string())
+                Self(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
             }
         }
     }
 }
 
-impl From<FindAllAuthorsError> for ApiError {
+impl From<FindAllAuthorsError> for HttpError {
     fn from(err: FindAllAuthorsError) -> Self {
         match err {
             FindAllAuthorsError(cause) => {
                 tracing::error!("{cause:?}\n{}", cause.backtrace());
-                Self::InternalServerError("Internal server error".to_string())
+                Self(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
             }
         }
     }
 }
 
-impl From<DeleteAuthorError> for ApiError {
+impl From<DeleteAuthorError> for HttpError {
     fn from(err: DeleteAuthorError) -> Self {
         match err {
-            DeleteAuthorError::NotFound { id } => {
-                Self::NotFound(format!(r#"author with id "{id}" does not exist"#))
-            }
+            DeleteAuthorError::NotFound { id } => Self(
+                StatusCode::NOT_FOUND,
+                format!(r#"author with id "{id}" does not exist"#),
+            ),
             DeleteAuthorError::Other(cause) => {
                 tracing::error!("{cause:?}\n{}", cause.backtrace());
-                Self::InternalServerError("Internal server error".to_string())
+                Self(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
             }
         }
     }
 }
 
-impl From<ParseIdError> for ApiError {
+impl From<ParseIdError> for HttpError {
     fn from(err: ParseIdError) -> Self {
-        Self::BadRequest(format!(r#"Cannot parse id from "{}""#, err.id))
+        Self(
+            StatusCode::BAD_REQUEST,
+            format!(r#"Cannot parse id from "{}""#, err.id),
+        )
     }
 }
 
@@ -245,59 +219,60 @@ impl TryFrom<String> for DeleteAuthorRequest {
 pub async fn create_author(
     State(state): State<AppState>,
     Json(body): Json<CreateAuthorHttpRequest>,
-) -> Result<ApiSuccess<CreateAuthorHttpResponse>, ApiError> {
+) -> Result<HttpSuccess<CreateAuthorHttpResponse>, HttpError> {
     let req = body.try_into()?;
     state
         .author_repo
         .create_author(&req)
         .await
-        .map_err(ApiError::from)
-        .map(|author| ApiSuccess::new(StatusCode::CREATED, author.into()))
+        .map_err(HttpError::from)
+        .map(|author| HttpSuccess::new(StatusCode::CREATED, author.into()))
 }
 
 pub async fn find_author(
     Path(id): Path<String>,
     State(state): State<AppState>,
-) -> Result<ApiSuccess<FindAuthorHttpResponse>, ApiError> {
+) -> Result<HttpSuccess<FindAuthorHttpResponse>, HttpError> {
     let req = id.try_into()?;
     state
         .author_repo
         .find_author(&req)
         .await
-        .map_err(ApiError::from)
-        .map(|author| ApiSuccess::new(StatusCode::OK, author.into()))
+        .map_err(HttpError::from)
+        .map(|author| HttpSuccess::new(StatusCode::OK, author.into()))
 }
 
 pub async fn find_all_authors(
     State(state): State<AppState>,
-) -> Result<ApiSuccess<FindAllAuthorsHttpResponse>, ApiError> {
+) -> Result<HttpSuccess<FindAllAuthorsHttpResponse>, HttpError> {
     state
         .author_repo
         .find_all_authors()
         .await
-        .map_err(ApiError::from)
-        .map(|authors| ApiSuccess::new(StatusCode::OK, authors.into()))
+        .map_err(HttpError::from)
+        .map(|authors| HttpSuccess::new(StatusCode::OK, authors.into()))
 }
 
 pub async fn delete_author(
     Path(id): Path<String>,
     State(state): State<AppState>,
-) -> Result<ApiSuccess<()>, ApiError> {
+) -> Result<HttpSuccess<()>, HttpError> {
     let req = id.try_into()?;
     state
         .author_repo
         .delete_author(&req)
         .await
-        .map_err(ApiError::from)
-        .map(|()| ApiSuccess::new(StatusCode::NO_CONTENT, ()))
+        .map_err(HttpError::from)
+        .map(|()| HttpSuccess::new(StatusCode::NO_CONTENT, ()))
 }
 
 #[cfg(test)]
 mod tests {
     use crate::http::AppState;
     use crate::http::handler::{
-        ApiSuccess, CreateAuthorHttpRequest, CreateAuthorHttpResponse, FindAllAuthorsHttpResponse,
-        FindAuthorHttpResponse, create_author, delete_author, find_all_authors, find_author,
+        CreateAuthorHttpRequest, CreateAuthorHttpResponse, FindAllAuthorsHttpResponse,
+        FindAuthorHttpResponse, HttpSuccess, create_author, delete_author, find_all_authors,
+        find_author,
     };
     use crate::model::{
         Author, AuthorName, CreateAuthorError, CreateAuthorRequest, DeleteAuthorError,
@@ -391,7 +366,7 @@ mod tests {
             name: author_name.to_string(),
             email: author_email.to_string(),
         });
-        let expected = ApiSuccess::new(
+        let expected = HttpSuccess::new(
             StatusCode::CREATED,
             CreateAuthorHttpResponse { id: author_id },
         );
@@ -422,7 +397,7 @@ mod tests {
         };
         let path = Path(author_id.to_string());
         let state = State(AppState::new(repo));
-        let expected = ApiSuccess::new(
+        let expected = HttpSuccess::new(
             StatusCode::OK,
             FindAuthorHttpResponse {
                 id: author_id,
@@ -456,7 +431,7 @@ mod tests {
             ..MockAuthorRepository::new()
         };
         let state = State(AppState::new(repo));
-        let expected = ApiSuccess::new(
+        let expected = HttpSuccess::new(
             StatusCode::OK,
             FindAllAuthorsHttpResponse(vec![FindAuthorHttpResponse {
                 id: author_id,
@@ -485,7 +460,7 @@ mod tests {
         };
         let path = Path(author_id.to_string());
         let state = State(AppState::new(repo));
-        let expected = ApiSuccess::new(StatusCode::NO_CONTENT, ());
+        let expected = HttpSuccess::new(StatusCode::NO_CONTENT, ());
         let actual = delete_author(path, state).await;
         assert!(
             actual.is_ok(),
