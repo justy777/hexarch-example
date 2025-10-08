@@ -14,24 +14,29 @@ const UNIQUE_CONSTRAINT_VIOLATION_CODE: &str = "2067";
 
 static MIGRATOR: Migrator = sqlx::migrate!();
 
+pub async fn create_pool(path: &str) -> anyhow::Result<SqlitePool> {
+    let opts = SqliteConnectOptions::from_str(path)
+        .with_context(|| format!("Invalid database path {path}"))?
+        .foreign_keys(true)
+        .journal_mode(SqliteJournalMode::Wal);
+    let pool = SqlitePool::connect_with(opts)
+        .await
+        .with_context(|| format!("Failed to open database at {path}"))?;
+
+    MIGRATOR.run(&pool).await?;
+
+    Ok(pool)
+}
+
 #[derive(Debug)]
-pub struct Sqlite {
+pub struct DefaultAuthorRepository {
     pool: SqlitePool,
 }
 
-impl Sqlite {
-    pub async fn new(path: &str) -> anyhow::Result<Self> {
-        let opts = SqliteConnectOptions::from_str(path)
-            .with_context(|| format!("Invalid database path {path}"))?
-            .foreign_keys(true)
-            .journal_mode(SqliteJournalMode::Wal);
-        let pool = SqlitePool::connect_with(opts)
-            .await
-            .with_context(|| format!("Failed to open database at {path}"))?;
-
-        MIGRATOR.run(&pool).await?;
-
-        Ok(Self { pool })
+impl DefaultAuthorRepository {
+    #[must_use]
+    pub const fn new(pool: SqlitePool) -> Self {
+        Self { pool }
     }
 }
 
@@ -48,7 +53,7 @@ impl<'r> FromRow<'r, SqliteRow> for Author {
 }
 
 #[async_trait]
-impl AuthorRepository for Sqlite {
+impl AuthorRepository for DefaultAuthorRepository {
     async fn create_author(&self, req: &CreateAuthorRequest) -> Result<Author, CreateAuthorError> {
         let author = sqlx::query_as("INSERT INTO author (name, email) VALUES (?, ?) RETURNING *")
             .bind(req.name().to_string())
