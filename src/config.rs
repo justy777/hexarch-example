@@ -1,9 +1,10 @@
 use anyhow::Context;
+use std::str::FromStr;
 
 #[derive(Debug)]
 pub struct Config {
     database_url: String,
-    server_port: String,
+    server_port: u16,
 }
 
 impl Config {
@@ -22,11 +23,18 @@ impl Config {
     }
 
     #[must_use]
-    pub fn server_port(&self) -> &str {
-        &self.server_port
+    pub const fn server_port(&self) -> u16 {
+        self.server_port
     }
 }
 
-fn load_env(key: &str) -> anyhow::Result<String> {
-    std::env::var(key).with_context(|| format!("Failed to load environment variable {key}"))
+fn load_env<T>(key: &str) -> anyhow::Result<T>
+where
+    T: FromStr,
+    <T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
+{
+    let val =
+        std::env::var(key).with_context(|| format!("Failed to load environment variable {key}"))?;
+    val.parse::<T>()
+        .with_context(|| format!("Failed to parse environment variable {key}"))
 }
