@@ -1,14 +1,15 @@
 use regex::Regex;
 use std::sync::LazyLock;
+use thiserror::Error;
 
 #[derive(Debug, Clone)]
 pub struct AuthorName(String);
 
 impl AuthorName {
-    pub fn new(raw: &str) -> Result<Self, AuthorNameError> {
+    pub fn new(raw: &str) -> Result<Self, AuthorNameEmptyError> {
         let trimmed = raw.trim();
         if trimmed.is_empty() {
-            Err(AuthorNameError::Empty)
+            Err(AuthorNameEmptyError)
         } else {
             Ok(Self(trimmed.into()))
         }
@@ -25,22 +26,9 @@ impl std::fmt::Display for AuthorName {
     }
 }
 
-#[derive(Debug)]
-pub enum AuthorNameError {
-    Invalid(String),
-    Empty,
-}
-
-impl std::fmt::Display for AuthorNameError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Invalid(name) => write!(f, "Author name {name} is invalid"),
-            Self::Empty => write!(f, "Author name cannot be empty"),
-        }
-    }
-}
-
-impl std::error::Error for AuthorNameError {}
+#[derive(Error, Debug)]
+#[error("Author name cannot be empty")]
+pub struct AuthorNameEmptyError;
 
 #[derive(Debug, Clone)]
 pub struct EmailAddress(String);
@@ -48,12 +36,10 @@ pub struct EmailAddress(String);
 impl EmailAddress {
     pub fn new(raw: &str) -> Result<Self, EmailAddressError> {
         let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            Err(EmailAddressError::Empty)
-        } else if !Self::is_valid(trimmed) {
-            Err(EmailAddressError::Invalid(trimmed.into()))
-        } else {
+        if Self::is_valid(trimmed) {
             Ok(Self(trimmed.into()))
+        } else {
+            Err(EmailAddressError(trimmed.into()))
         }
     }
 
@@ -75,22 +61,9 @@ impl std::fmt::Display for EmailAddress {
     }
 }
 
-#[derive(Debug)]
-pub enum EmailAddressError {
-    Invalid(String),
-    Empty,
-}
-
-impl std::fmt::Display for EmailAddressError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Invalid(name) => write!(f, "Email address name {name} is invalid"),
-            Self::Empty => write!(f, "Email address cannot be empty"),
-        }
-    }
-}
-
-impl std::error::Error for EmailAddressError {}
+#[derive(Error, Debug)]
+#[error("{0} is not a valid email address")]
+pub struct EmailAddressError(String);
 
 #[derive(Debug)]
 pub struct Author {
@@ -137,22 +110,13 @@ impl CreateAuthorRequest {
     }
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum CreateAuthorError {
+    #[error("Author with name \"{name}\" already exists")]
     Duplicate { name: String },
-    Unknown(anyhow::Error),
+    #[error(transparent)]
+    Other(anyhow::Error),
 }
-
-impl std::fmt::Display for CreateAuthorError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Duplicate { name } => write!(f, r#"Author with name "{name}" already exists"#),
-            Self::Unknown(err) => write!(f, "{err}"),
-        }
-    }
-}
-
-impl std::error::Error for CreateAuthorError {}
 
 #[derive(Debug)]
 pub struct FindAuthorRequest {
@@ -169,33 +133,17 @@ impl FindAuthorRequest {
     }
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum FindAuthorError {
+    #[error("Author with id \"{id}\" does not exist")]
     NotFound { id: u64 },
-    Unknown(anyhow::Error),
+    #[error(transparent)]
+    Other(anyhow::Error),
 }
 
-impl std::fmt::Display for FindAuthorError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NotFound { id } => write!(f, r#"Author with id "{id}" does not exist"#),
-            Self::Unknown(err) => write!(f, "{err}"),
-        }
-    }
-}
-
-impl std::error::Error for FindAuthorError {}
-
-#[derive(Debug)]
-pub struct FindAllAuthorsError(pub anyhow::Error);
-
-impl std::fmt::Display for FindAllAuthorsError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::error::Error for FindAllAuthorsError {}
+#[derive(Error, Debug)]
+#[error(transparent)]
+pub struct FindAllAuthorsError(#[from] pub anyhow::Error);
 
 #[derive(Debug)]
 pub struct DeleteAuthorRequest {
@@ -212,19 +160,10 @@ impl DeleteAuthorRequest {
     }
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum DeleteAuthorError {
+    #[error("Author with id \"{id}\" does not exist")]
     NotFound { id: u64 },
-    Unknown(anyhow::Error),
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
-
-impl std::fmt::Display for DeleteAuthorError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NotFound { id } => write!(f, r#"Author with id "{id}" does not exist"#),
-            Self::Unknown(err) => write!(f, "{err}"),
-        }
-    }
-}
-
-impl std::error::Error for DeleteAuthorError {}

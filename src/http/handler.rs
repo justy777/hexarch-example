@@ -1,17 +1,18 @@
 use crate::http::AppState;
 use crate::model::{
-    Author, AuthorName, AuthorNameError, CreateAuthorError, CreateAuthorRequest, DeleteAuthorError,
-    DeleteAuthorRequest, EmailAddress, EmailAddressError, FindAllAuthorsError, FindAuthorError,
-    FindAuthorRequest,
+    Author, AuthorName, AuthorNameEmptyError, CreateAuthorError, CreateAuthorRequest,
+    DeleteAuthorError, DeleteAuthorRequest, EmailAddress, EmailAddressError, FindAllAuthorsError,
+    FindAuthorError, FindAuthorRequest,
 };
 use crate::store::AuthorRepository;
 use axum::extract::{Json, Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Debug)]
-pub struct ApiSuccess<T: Serialize + PartialEq>(StatusCode, Json<ApiResponse<T>>);
+pub struct ApiSuccess<T>(StatusCode, Json<ApiResponse<T>>);
 
 impl<T: Serialize + PartialEq> ApiSuccess<T> {
     pub const fn new(status: StatusCode, data: T) -> Self {
@@ -49,7 +50,8 @@ impl<T: Serialize + PartialEq> ApiResponse<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
+#[error("{0}")]
 pub enum ApiError {
     InternalServerError(String),
     BadRequest(String),
@@ -69,21 +71,6 @@ impl ApiError {
         }
     }
 }
-
-impl std::fmt::Display for ApiError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = match self {
-            Self::InternalServerError(msg)
-            | Self::BadRequest(msg)
-            | Self::NotFound(msg)
-            | Self::Conflict(msg)
-            | Self::UnprocessableEntity(msg) => msg,
-        };
-        write!(f, "{msg}")
-    }
-}
-
-impl std::error::Error for ApiError {}
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
@@ -106,7 +93,7 @@ impl From<CreateAuthorError> for ApiError {
             CreateAuthorError::Duplicate { name } => {
                 Self::Conflict(format!(r#"author with name "{name}" already exists"#))
             }
-            CreateAuthorError::Unknown(cause) => {
+            CreateAuthorError::Other(cause) => {
                 tracing::error!("{cause:?}\n{}", cause.backtrace());
                 Self::InternalServerError("Internal server error".to_string())
             }
@@ -120,7 +107,7 @@ impl From<FindAuthorError> for ApiError {
             FindAuthorError::NotFound { id } => {
                 Self::NotFound(format!(r#"author with id "{id}" does not exist"#))
             }
-            FindAuthorError::Unknown(cause) => {
+            FindAuthorError::Other(cause) => {
                 tracing::error!("{cause:?}\n{}", cause.backtrace());
                 Self::InternalServerError("Internal server error".to_string())
             }
@@ -145,7 +132,7 @@ impl From<DeleteAuthorError> for ApiError {
             DeleteAuthorError::NotFound { id } => {
                 Self::NotFound(format!(r#"author with id "{id}" does not exist"#))
             }
-            DeleteAuthorError::Unknown(cause) => {
+            DeleteAuthorError::Other(cause) => {
                 tracing::error!("{cause:?}\n{}", cause.backtrace());
                 Self::InternalServerError("Internal server error".to_string())
             }
@@ -165,34 +152,12 @@ pub struct CreateAuthorHttpRequest {
     email: String,
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
+#[error(transparent)]
 pub enum ParseCreateAuthorHttpRequestError {
-    Name(AuthorNameError),
-    Email(EmailAddressError),
+    Name(#[from] AuthorNameEmptyError),
+    Email(#[from] EmailAddressError),
 }
-
-impl From<AuthorNameError> for ParseCreateAuthorHttpRequestError {
-    fn from(err: AuthorNameError) -> Self {
-        Self::Name(err)
-    }
-}
-
-impl From<EmailAddressError> for ParseCreateAuthorHttpRequestError {
-    fn from(err: EmailAddressError) -> Self {
-        Self::Email(err)
-    }
-}
-
-impl std::fmt::Display for ParseCreateAuthorHttpRequestError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Name(err) => write!(f, "{err}"),
-            Self::Email(err) => write!(f, "{err}"),
-        }
-    }
-}
-
-impl std::error::Error for ParseCreateAuthorHttpRequestError {}
 
 impl TryFrom<CreateAuthorHttpRequest> for CreateAuthorRequest {
     type Error = ParseCreateAuthorHttpRequestError;
@@ -358,16 +323,16 @@ mod tests {
     impl MockAuthorRepository {
         pub fn new() -> Self {
             Self {
-                create: Arc::new(Mutex::new(Err(CreateAuthorError::Unknown(anyhow!(
+                create: Arc::new(Mutex::new(Err(CreateAuthorError::Other(anyhow!(
                     "substitute error"
                 ))))),
-                find: Arc::new(Mutex::new(Err(FindAuthorError::Unknown(anyhow!(
+                find: Arc::new(Mutex::new(Err(FindAuthorError::Other(anyhow!(
                     "substitute error"
                 ))))),
                 find_all: Arc::new(Mutex::new(Err(FindAllAuthorsError(anyhow!(
                     "substitute error"
                 ))))),
-                delete: Arc::new(Mutex::new(Err(DeleteAuthorError::Unknown(anyhow!(
+                delete: Arc::new(Mutex::new(Err(DeleteAuthorError::Other(anyhow!(
                     "substitute error"
                 ))))),
             }
@@ -380,14 +345,14 @@ mod tests {
             _: &CreateAuthorRequest,
         ) -> Result<Author, CreateAuthorError> {
             let mut guard = self.create.lock();
-            let mut result = Err(CreateAuthorError::Unknown(anyhow!("substitute error")));
+            let mut result = Err(CreateAuthorError::Other(anyhow!("substitute error")));
             mem::swap(guard.as_deref_mut().unwrap(), &mut result);
             result
         }
 
         async fn find_author(&self, _: &FindAuthorRequest) -> Result<Author, FindAuthorError> {
             let mut guard = self.find.lock();
-            let mut result = Err(FindAuthorError::Unknown(anyhow!("substitute error")));
+            let mut result = Err(FindAuthorError::Other(anyhow!("substitute error")));
             mem::swap(guard.as_deref_mut().unwrap(), &mut result);
             result
         }
@@ -401,7 +366,7 @@ mod tests {
 
         async fn delete_author(&self, _: &DeleteAuthorRequest) -> Result<(), DeleteAuthorError> {
             let mut guard = self.delete.lock();
-            let mut result = Err(DeleteAuthorError::Unknown(anyhow!("substitute error")));
+            let mut result = Err(DeleteAuthorError::Other(anyhow!("substitute error")));
             mem::swap(guard.as_deref_mut().unwrap(), &mut result);
             result
         }

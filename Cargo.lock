@@ -511,6 +511,7 @@ dependencies = [
  "regex",
  "serde",
  "sqlx",
+ "thiserror",
  "tokio",
  "tower-http",
  "tracing",

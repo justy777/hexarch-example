@@ -63,7 +63,7 @@ impl AuthorRepository for Sqlite {
                         r#"Failed to create author with name "{}""#,
                         req.name()
                     ));
-                    CreateAuthorError::Unknown(err)
+                    CreateAuthorError::Other(err)
                 }
             })?;
 
@@ -83,7 +83,7 @@ impl AuthorRepository for Sqlite {
                         r#"Failed to retrieve author with id "{}""#,
                         req.id()
                     ));
-                    FindAuthorError::Unknown(err)
+                    FindAuthorError::Other(err)
                 }
             })?;
 
@@ -113,7 +113,7 @@ impl AuthorRepository for Sqlite {
                 } else {
                     let err = anyhow!(err)
                         .context(format!(r#"Failed to delete author with id "{}""#, req.id()));
-                    DeleteAuthorError::Unknown(err)
+                    DeleteAuthorError::Other(err)
                 }
             })?;
 
