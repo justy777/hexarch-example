@@ -79,7 +79,7 @@ impl AuthorRepository for DefaultAuthorRepository {
 
     async fn find_author(&self, req: &FindAuthorRequest) -> Result<Author, FindAuthorError> {
         let author = sqlx::query_as("SELECT id, name, email FROM author WHERE id = ?")
-            .bind(req.id().to_string())
+            .bind(req.id())
             .fetch_one(&self.pool)
             .await
             .map_err(|err| {
@@ -111,7 +111,7 @@ impl AuthorRepository for DefaultAuthorRepository {
 
     async fn delete_author(&self, req: &DeleteAuthorRequest) -> Result<(), DeleteAuthorError> {
         sqlx::query("DELETE FROM author WHERE id = ?")
-            .bind(req.id().to_string())
+            .bind(req.id())
             .execute(&self.pool)
             .await
             .map_err(|err| {

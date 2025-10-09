@@ -67,17 +67,17 @@ pub struct EmailAddressError(String);
 
 #[derive(Debug)]
 pub struct Author {
-    id: u64,
+    id: i32,
     name: AuthorName,
     email: EmailAddress,
 }
 
 impl Author {
-    pub const fn new(id: u64, name: AuthorName, email: EmailAddress) -> Self {
+    pub const fn new(id: i32, name: AuthorName, email: EmailAddress) -> Self {
         Self { id, name, email }
     }
 
-    pub const fn id(&self) -> u64 {
+    pub const fn id(&self) -> i32 {
         self.id
     }
 
@@ -120,15 +120,15 @@ pub enum CreateAuthorError {
 
 #[derive(Debug)]
 pub struct FindAuthorRequest {
-    id: u64,
+    id: i32,
 }
 
 impl FindAuthorRequest {
-    pub const fn new(id: u64) -> Self {
+    pub const fn new(id: i32) -> Self {
         Self { id }
     }
 
-    pub const fn id(&self) -> u64 {
+    pub const fn id(&self) -> i32 {
         self.id
     }
 }
@@ -136,7 +136,7 @@ impl FindAuthorRequest {
 #[derive(Error, Debug)]
 pub enum FindAuthorError {
     #[error("Author with id \"{id}\" does not exist")]
-    NotFound { id: u64 },
+    NotFound { id: i32 },
     #[error(transparent)]
     Other(anyhow::Error),
 }
@@ -147,15 +147,15 @@ pub struct FindAllAuthorsError(#[from] pub anyhow::Error);
 
 #[derive(Debug)]
 pub struct DeleteAuthorRequest {
-    id: u64,
+    id: i32,
 }
 
 impl DeleteAuthorRequest {
-    pub const fn new(id: u64) -> Self {
+    pub const fn new(id: i32) -> Self {
         Self { id }
     }
 
-    pub const fn id(&self) -> u64 {
+    pub const fn id(&self) -> i32 {
         self.id
     }
 }
@@ -163,7 +163,7 @@ impl DeleteAuthorRequest {
 #[derive(Error, Debug)]
 pub enum DeleteAuthorError {
     #[error("Author with id \"{id}\" does not exist")]
-    NotFound { id: u64 },
+    NotFound { id: i32 },
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

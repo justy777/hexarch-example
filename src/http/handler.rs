@@ -144,7 +144,7 @@ impl TryFrom<CreateAuthorHttpRequest> for CreateAuthorRequest {
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct CreateAuthorHttpResponse {
-    id: u64,
+    id: i32,
 }
 
 #[derive(Debug)]
@@ -169,7 +169,7 @@ impl TryFrom<String> for FindAuthorRequest {
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         let id = value
-            .parse::<u64>()
+            .parse::<i32>()
             .map_err(|_| ParseIdError { id: value })?;
         Ok(Self::new(id))
     }
@@ -177,7 +177,7 @@ impl TryFrom<String> for FindAuthorRequest {
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct FindAuthorHttpResponse {
-    id: u64,
+    id: i32,
     name: String,
     email: String,
 }
@@ -210,7 +210,7 @@ impl TryFrom<String> for DeleteAuthorRequest {
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         let id = value
-            .parse::<u64>()
+            .parse::<i32>()
             .map_err(|_| ParseIdError { id: value })?;
         Ok(Self::new(id))
     }
