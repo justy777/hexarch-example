@@ -1,6 +1,8 @@
 mod handler;
 
-use crate::http::handler::{create_author, delete_author, find_all_authors, find_author};
+use crate::http::handler::{
+    create_author, delete_author, find_all_authors, find_author, patch_author,
+};
 
 use crate::store::AuthorRepository;
 use anyhow::Context;
@@ -49,7 +51,7 @@ impl HttpServer {
             });
 
         let router = Router::new()
-            .nest("/api/v1", routes())
+            .nest("/api/v1", api_routes())
             .layer(trace_layer)
             .with_state(state);
 
@@ -69,8 +71,12 @@ impl HttpServer {
     }
 }
 
-fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/authors", get(find_all_authors).post(create_author))
-        .route("/authors/{id}", get(find_author).delete(delete_author))
+fn api_routes() -> Router<AppState> {
+    let author_routes = Router::new()
+        .route("/", get(find_all_authors).post(create_author))
+        .route(
+            "/{id}",
+            get(find_author).patch(patch_author).delete(delete_author),
+        );
+    Router::new().nest("/authors", author_routes)
 }

@@ -146,6 +146,51 @@ pub enum FindAuthorError {
 pub struct FindAllAuthorsError(#[from] pub anyhow::Error);
 
 #[derive(Debug)]
+pub struct PatchAuthorRequest {
+    id: i32,
+    name: Option<AuthorName>,
+    email: Option<EmailAddress>,
+}
+
+impl PatchAuthorRequest {
+    pub const fn new(id: i32) -> Self {
+        Self {
+            id,
+            name: None,
+            email: None,
+        }
+    }
+
+    pub const fn id(&self) -> i32 {
+        self.id
+    }
+
+    pub const fn name(&self) -> Option<&AuthorName> {
+        self.name.as_ref()
+    }
+
+    pub fn set_name(&mut self, name: AuthorName) {
+        self.name = Some(name);
+    }
+
+    pub const fn email(&self) -> Option<&EmailAddress> {
+        self.email.as_ref()
+    }
+
+    pub fn set_email(&mut self, email: EmailAddress) {
+        self.email = Some(email);
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum PatchAuthorError {
+    #[error("Author with id \"{id}\" does not exist")]
+    NotFound { id: i32 },
+    #[error(transparent)]
+    Other(anyhow::Error),
+}
+
+#[derive(Debug)]
 pub struct DeleteAuthorRequest {
     id: i32,
 }

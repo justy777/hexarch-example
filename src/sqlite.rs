@@ -1,6 +1,7 @@
 use crate::model::{
     Author, AuthorName, CreateAuthorError, CreateAuthorRequest, DeleteAuthorError,
     DeleteAuthorRequest, EmailAddress, FindAllAuthorsError, FindAuthorError, FindAuthorRequest,
+    PatchAuthorError, PatchAuthorRequest,
 };
 use crate::store::AuthorRepository;
 use anyhow::{Context, anyhow};
@@ -107,6 +108,43 @@ impl AuthorRepository for DefaultAuthorRepository {
             })?;
 
         Ok(authors)
+    }
+
+    async fn patch_author(&self, req: &PatchAuthorRequest) -> Result<(), PatchAuthorError> {
+        let mut parts = Vec::new();
+        let mut binds = Vec::new();
+
+        if let Some(name) = req.name() {
+            parts.push("name = ?");
+            binds.push(name.to_string());
+        }
+        if let Some(email) = req.email() {
+            parts.push("email = ?");
+            binds.push(email.to_string());
+        }
+
+        let query = format!("UPDATE author SET {} WHERE id = ?", parts.join(", "));
+        let mut query = sqlx::query(&query);
+
+        for bind in binds {
+            query = query.bind(bind);
+        }
+
+        query
+            .bind(req.id())
+            .execute(&self.pool)
+            .await
+            .map_err(|err| {
+                if matches!(err, sqlx::Error::RowNotFound) {
+                    PatchAuthorError::NotFound { id: req.id() }
+                } else {
+                    let err = anyhow!(err)
+                        .context(format!(r#"Failed to update author with id "{}""#, req.id()));
+                    PatchAuthorError::Other(err)
+                }
+            })?;
+
+        Ok(())
     }
 
     async fn delete_author(&self, req: &DeleteAuthorRequest) -> Result<(), DeleteAuthorError> {
