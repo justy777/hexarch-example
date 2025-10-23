@@ -1,5 +1,5 @@
 pub mod config;
+pub mod database;
 pub mod http;
-mod model;
-pub mod sqlite;
-mod store;
+mod models;
+mod repositories;

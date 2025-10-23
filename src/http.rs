@@ -1,10 +1,10 @@
-mod handler;
+mod handlers;
 
-use crate::http::handler::{
-    create_author, delete_author, find_all_authors, find_author, patch_author,
+use crate::http::handlers::{
+    create_author, delete_author, find_all_authors, find_author, update_author,
 };
 
-use crate::store::AuthorRepository;
+use crate::repositories::AuthorRepository;
 use anyhow::Context;
 use axum::Router;
 use axum::routing::get;
@@ -76,7 +76,7 @@ fn api_routes() -> Router<AppState> {
         .route("/", get(find_all_authors).post(create_author))
         .route(
             "/{id}",
-            get(find_author).patch(patch_author).delete(delete_author),
+            get(find_author).patch(update_author).delete(delete_author),
         );
     Router::new().nest("/authors", author_routes)
 }

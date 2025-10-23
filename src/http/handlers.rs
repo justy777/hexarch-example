@@ -1,8 +1,8 @@
 use crate::http::AppState;
-use crate::model::{
+use crate::models::{
     Author, AuthorName, AuthorNameEmptyError, CreateAuthorError, CreateAuthorRequest,
     DeleteAuthorError, DeleteAuthorRequest, EmailAddress, EmailAddressError, FindAllAuthorsError,
-    FindAuthorError, FindAuthorRequest, PatchAuthorError, PatchAuthorRequest,
+    FindAuthorError, FindAuthorRequest, UpdateAuthorError, UpdateAuthorRequest,
 };
 use axum::extract::{Json, Path, State};
 use axum::http::StatusCode;
@@ -42,8 +42,8 @@ impl From<ParseCreateAuthorHttpRequestError> for HttpError {
     }
 }
 
-impl From<ParsePatchAuthorHttpRequestError> for HttpError {
-    fn from(err: ParsePatchAuthorHttpRequestError) -> Self {
+impl From<ParseUpdateAuthorHttpRequestError> for HttpError {
+    fn from(err: ParseUpdateAuthorHttpRequestError) -> Self {
         let msg = err.to_string();
         Self(StatusCode::UNPROCESSABLE_ENTITY, msg)
     }
@@ -99,14 +99,14 @@ impl From<FindAllAuthorsError> for HttpError {
     }
 }
 
-impl From<PatchAuthorError> for HttpError {
-    fn from(err: PatchAuthorError) -> Self {
+impl From<UpdateAuthorError> for HttpError {
+    fn from(err: UpdateAuthorError) -> Self {
         match err {
-            PatchAuthorError::NotFound { id } => Self(
+            UpdateAuthorError::NotFound { id } => Self(
                 StatusCode::NOT_FOUND,
                 format!(r#"author with id "{id}" does not exist"#),
             ),
-            PatchAuthorError::Other(cause) => {
+            UpdateAuthorError::Other(cause) => {
                 tracing::error!("{cause:?}\n{}", cause.backtrace());
                 Self(
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -226,22 +226,22 @@ impl From<Vec<Author>> for FindAllAuthorsHttpResponse {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct PatchAuthorHttpRequest {
+pub struct UpdateAuthorHttpRequest {
     name: Option<String>,
     email: Option<String>,
 }
 
 #[derive(Error, Debug)]
 #[error(transparent)]
-pub enum ParsePatchAuthorHttpRequestError {
+pub enum ParseUpdateAuthorHttpRequestError {
     Id(#[from] ParseIdError),
     Name(#[from] AuthorNameEmptyError),
     Email(#[from] EmailAddressError),
 }
 
-impl TryFrom<(String, PatchAuthorHttpRequest)> for PatchAuthorRequest {
-    type Error = ParsePatchAuthorHttpRequestError;
-    fn try_from((id, parts): (String, PatchAuthorHttpRequest)) -> Result<Self, Self::Error> {
+impl TryFrom<(String, UpdateAuthorHttpRequest)> for UpdateAuthorRequest {
+    type Error = ParseUpdateAuthorHttpRequestError;
+    fn try_from((id, parts): (String, UpdateAuthorHttpRequest)) -> Result<Self, Self::Error> {
         let id = id.parse::<i32>().map_err(|_| ParseIdError { id })?;
         let mut req = Self::new(id);
         if let Some(name) = &parts.name {
@@ -305,15 +305,15 @@ pub async fn find_all_authors(
         .map(|authors| HttpSuccess::new(StatusCode::OK, authors.into()))
 }
 
-pub async fn patch_author(
+pub async fn update_author(
     Path(id): Path<String>,
     State(state): State<AppState>,
-    Json(body): Json<PatchAuthorHttpRequest>,
+    Json(body): Json<UpdateAuthorHttpRequest>,
 ) -> Result<HttpSuccess<()>, HttpError> {
     let req = (id, body).try_into()?;
     state
         .author_repo
-        .patch_author(&req)
+        .update_author(&req)
         .await
         .map_err(HttpError::from)
         .map(|()| HttpSuccess::new(StatusCode::NO_CONTENT, ()))
@@ -335,17 +335,17 @@ pub async fn delete_author(
 #[cfg(test)]
 mod tests {
     use crate::http::AppState;
-    use crate::http::handler::{
+    use crate::http::handlers::{
         CreateAuthorHttpRequest, CreateAuthorHttpResponse, FindAllAuthorsHttpResponse,
-        FindAuthorHttpResponse, HttpSuccess, PatchAuthorHttpRequest, create_author, delete_author,
-        find_all_authors, find_author, patch_author,
+        FindAuthorHttpResponse, HttpSuccess, UpdateAuthorHttpRequest, create_author, delete_author,
+        find_all_authors, find_author, update_author,
     };
-    use crate::model::{
+    use crate::models::{
         Author, AuthorName, CreateAuthorError, CreateAuthorRequest, DeleteAuthorError,
         DeleteAuthorRequest, EmailAddress, FindAllAuthorsError, FindAuthorError, FindAuthorRequest,
-        PatchAuthorError, PatchAuthorRequest,
+        UpdateAuthorError, UpdateAuthorRequest,
     };
-    use crate::store::AuthorRepository;
+    use crate::repositories::AuthorRepository;
     use anyhow::anyhow;
     use async_trait::async_trait;
     use axum::Json;
@@ -359,7 +359,7 @@ mod tests {
         create: Arc<Mutex<Result<Author, CreateAuthorError>>>,
         find: Arc<Mutex<Result<Author, FindAuthorError>>>,
         find_all: Arc<Mutex<Result<Vec<Author>, FindAllAuthorsError>>>,
-        patch: Arc<Mutex<Result<(), PatchAuthorError>>>,
+        update: Arc<Mutex<Result<(), UpdateAuthorError>>>,
         delete: Arc<Mutex<Result<(), DeleteAuthorError>>>,
     }
 
@@ -375,7 +375,7 @@ mod tests {
                 find_all: Arc::new(Mutex::new(Err(FindAllAuthorsError(anyhow!(
                     "substitute error"
                 ))))),
-                patch: Arc::new(Mutex::new(Err(PatchAuthorError::Other(anyhow!(
+                update: Arc::new(Mutex::new(Err(UpdateAuthorError::Other(anyhow!(
                     "substitute error"
                 ))))),
                 delete: Arc::new(Mutex::new(Err(DeleteAuthorError::Other(anyhow!(
@@ -411,9 +411,9 @@ mod tests {
             result
         }
 
-        async fn patch_author(&self, _: &PatchAuthorRequest) -> Result<(), PatchAuthorError> {
-            let mut guard = self.patch.lock();
-            let mut result = Err(PatchAuthorError::Other(anyhow!("substitute error")));
+        async fn update_author(&self, _: &UpdateAuthorRequest) -> Result<(), UpdateAuthorError> {
+            let mut guard = self.update.lock();
+            let mut result = Err(UpdateAuthorError::Other(anyhow!("substitute error")));
             mem::swap(guard.as_deref_mut().unwrap(), &mut result);
             result
         }
@@ -530,20 +530,20 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn patch_author_handler_success() {
+    async fn update_author_handler_success() {
         let author_id = 1;
         let repo = MockAuthorRepository {
-            patch: Arc::new(Mutex::new(Ok(()))),
+            update: Arc::new(Mutex::new(Ok(()))),
             ..MockAuthorRepository::new()
         };
         let path = Path(author_id.to_string());
         let state = State(AppState::new(repo));
-        let body = Json(PatchAuthorHttpRequest {
+        let body = Json(UpdateAuthorHttpRequest {
             name: Some("Barry Allen".into()),
             email: None,
         });
         let expected = HttpSuccess::new(StatusCode::NO_CONTENT, ());
-        let actual = patch_author(path, state, body).await;
+        let actual = update_author(path, state, body).await;
         assert!(
             actual.is_ok(),
             "expected delete author to succeed, but got {actual:?}",

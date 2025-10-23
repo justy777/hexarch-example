@@ -146,13 +146,13 @@ pub enum FindAuthorError {
 pub struct FindAllAuthorsError(#[from] pub anyhow::Error);
 
 #[derive(Debug)]
-pub struct PatchAuthorRequest {
+pub struct UpdateAuthorRequest {
     id: i32,
     name: Option<AuthorName>,
     email: Option<EmailAddress>,
 }
 
-impl PatchAuthorRequest {
+impl UpdateAuthorRequest {
     pub const fn new(id: i32) -> Self {
         Self {
             id,
@@ -183,7 +183,7 @@ impl PatchAuthorRequest {
 }
 
 #[derive(Error, Debug)]
-pub enum PatchAuthorError {
+pub enum UpdateAuthorError {
     #[error("Author with id \"{id}\" does not exist")]
     NotFound { id: i32 },
     #[error(transparent)]

@@ -1,6 +1,6 @@
 use hexarch_example::config::Config;
+use hexarch_example::database::{DefaultAuthorRepository, establish_pool};
 use hexarch_example::http::{AppState, HttpServer, HttpServerConfig};
-use hexarch_example::sqlite::{DefaultAuthorRepository, create_pool};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -8,7 +8,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing_subscriber::fmt::init();
 
-    let pool = create_pool(config.database_url()).await?;
+    let pool = establish_pool(config.database_url()).await?;
     let repo = DefaultAuthorRepository::new(pool);
     let state = AppState::new(repo);
 

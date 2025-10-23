@@ -1,9 +1,9 @@
-use crate::model::{
+use crate::models::{
     Author, AuthorName, CreateAuthorError, CreateAuthorRequest, DeleteAuthorError,
     DeleteAuthorRequest, EmailAddress, FindAllAuthorsError, FindAuthorError, FindAuthorRequest,
-    PatchAuthorError, PatchAuthorRequest,
+    UpdateAuthorError, UpdateAuthorRequest,
 };
-use crate::store::AuthorRepository;
+use crate::repositories::AuthorRepository;
 use anyhow::{Context, anyhow};
 use async_trait::async_trait;
 use sqlx::migrate::Migrator;
@@ -11,11 +11,9 @@ use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteRow};
 use sqlx::{FromRow, Row, SqlitePool};
 use std::str::FromStr;
 
-const UNIQUE_CONSTRAINT_VIOLATION_CODE: &str = "2067";
-
 static MIGRATOR: Migrator = sqlx::migrate!();
 
-pub async fn create_pool(path: &str) -> anyhow::Result<SqlitePool> {
+pub async fn establish_pool(path: &str) -> anyhow::Result<SqlitePool> {
     let opts = SqliteConnectOptions::from_str(path)
         .with_context(|| format!("Invalid database path {path}"))?
         .foreign_keys(true)
@@ -62,7 +60,7 @@ impl AuthorRepository for DefaultAuthorRepository {
             .fetch_one(&self.pool)
             .await
             .map_err(|err| {
-                if is_unique_constraint_violation(&err) {
+                if is_unique_violation(&err) {
                     CreateAuthorError::Duplicate {
                         name: req.name().to_string(),
                     }
@@ -110,7 +108,7 @@ impl AuthorRepository for DefaultAuthorRepository {
         Ok(authors)
     }
 
-    async fn patch_author(&self, req: &PatchAuthorRequest) -> Result<(), PatchAuthorError> {
+    async fn update_author(&self, req: &UpdateAuthorRequest) -> Result<(), UpdateAuthorError> {
         let mut parts = Vec::new();
         let mut binds = Vec::new();
 
@@ -136,11 +134,11 @@ impl AuthorRepository for DefaultAuthorRepository {
             .await
             .map_err(|err| {
                 if matches!(err, sqlx::Error::RowNotFound) {
-                    PatchAuthorError::NotFound { id: req.id() }
+                    UpdateAuthorError::NotFound { id: req.id() }
                 } else {
                     let err = anyhow!(err)
                         .context(format!(r#"Failed to update author with id "{}""#, req.id()));
-                    PatchAuthorError::Other(err)
+                    UpdateAuthorError::Other(err)
                 }
             })?;
 
@@ -166,11 +164,9 @@ impl AuthorRepository for DefaultAuthorRepository {
     }
 }
 
-fn is_unique_constraint_violation(err: &sqlx::Error) -> bool {
-    if let sqlx::Error::Database(db_err) = err
-        && let Some(code) = db_err.code()
-    {
-        return UNIQUE_CONSTRAINT_VIOLATION_CODE == code;
+fn is_unique_violation(err: &sqlx::Error) -> bool {
+    if let sqlx::Error::Database(db_err) = err {
+        return db_err.is_unique_violation();
     }
 
     false
